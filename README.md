@@ -1,7 +1,5 @@
 # Money-Flow 💰
 
-A simple and intuitive expense tracker app that helps users monitor their finances by tracking income and expenses, with automatic monthly summaries and financial insights.
-
 ## 📋 Project Overview
 
 Money-Flow is designed to solve the common problem of losing track of personal finances. Users can easily input their transactions (income/expenses) and get clear monthly overviews to make better financial decisions.
