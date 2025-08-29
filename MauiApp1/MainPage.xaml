@@ -1,0 +1,87 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MauiApp1.MainPage">
+
+    <AbsoluteLayout>
+
+
+        <ScrollView AbsoluteLayout.LayoutFlags="All"
+                    AbsoluteLayout.LayoutBounds="0,0,1,1">
+            <VerticalStackLayout Padding="20" Spacing="20">
+
+                <Grid ColumnDefinitions="*,Auto" Padding="0,10" VerticalOptions="Start">
+                    <Label Text=""
+                           Grid.Column="0" />
+
+                    <ImageButton x:Name="CurrencyButton"
+                                 Grid.Column="1"
+                                 Source="swissflag.png"
+                                 WidthRequest="50"
+                                 HeightRequest="30"
+                                 BackgroundColor="Transparent"
+                                 Clicked="OnCurrencyButtonClicked"/>
+                </Grid>
+
+                <Label Text="335.35"
+                       FontSize="36"
+                       HorizontalOptions="Center"
+                       TextColor="Black"/>
+
+                <VerticalStackLayout Spacing="10">
+
+                    <Button Text="+ 150&#x0a;Taschengeld"
+                            BackgroundColor="#10C060"
+                            CornerRadius="30"
+                            TextColor="Black"/>
+
+                    <Button Text="- 15&#x0a;Geschenk Max"
+                            BackgroundColor="#FF3C3C"
+                            CornerRadius="30"
+                            TextColor="Black"/>
+
+                    <Button Text="+ 150&#x0a;Einzahlung"
+                            BackgroundColor="#10C060"
+                            CornerRadius="30"
+                            TextColor="Black"/>
+
+                    <Button Text="- 1.50&#x0a;Getränk gekauft"
+                            BackgroundColor="#FF3C3C"
+                            CornerRadius="30"
+                            TextColor="Black"/>
+
+                    <Button Text="- 50&#x0a;Migros Einkauf"
+                            BackgroundColor="#FF3C3C"
+                            CornerRadius="30"
+                            TextColor="Black"/>
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+        </ScrollView>
+
+
+        <Frame x:Name="CurrencyPopup"
+               IsVisible="False"
+               CornerRadius="10"
+               BackgroundColor="White"
+               Padding="10"
+               HasShadow="True"
+               AbsoluteLayout.LayoutFlags="PositionProportional"
+               AbsoluteLayout.LayoutBounds="0.85,0.1,-1,-1">
+
+            <VerticalStackLayout Spacing="10">
+                <ImageButton Source="swissflag.png"
+                             WidthRequest="50"
+                             HeightRequest="30"
+                             Clicked="OnCurrencySelected" />
+                <ImageButton Source="euroflag.png"
+                             WidthRequest="50"
+                             HeightRequest="30"
+                             Clicked="OnCurrencySelected" />
+                <ImageButton Source="usaflag.png"
+                             WidthRequest="50"
+                             HeightRequest="30"
+                             Clicked="OnCurrencySelected" />
+            </VerticalStackLayout>
+        </Frame>
+    </AbsoluteLayout>
+</ContentPage>
