@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 // Interfaces
@@ -20,6 +20,7 @@ interface Transaction {
   amount: number;
   description: string;
   date: Date;
+  recurrence?: 'none' | 'weekly' | 'monthly' | 'secondly';
 }
 
 export default function MoneyFlowApp() {
@@ -32,6 +33,8 @@ export default function MoneyFlowApp() {
   const [newTransactionDescription, setNewTransactionDescription] = useState("");
   const [showAddTransaction, setShowAddTransaction] = useState(false);
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense');
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [recurrence, setRecurrence] = useState<'none' | 'weekly' | 'monthly' | 'secondly'>('none');
 
   const languages: Language[] = [
     { code: "de", name: "Deutsch", flag: "🇩🇪" },
@@ -183,7 +186,12 @@ export default function MoneyFlowApp() {
   const calculateCurrentBalance = (): number => {
     const initialBalance = parseFloat(bankBalance) || 0;
     const transactionTotal = transactions.reduce((total, transaction) => {
-      return total + (transaction.type === 'income' ? transaction.amount : -transaction.amount);
+      // If transaction is recurring, approximate occurrences per month
+      let occurrences = 1;
+      if (transaction.recurrence === 'weekly') occurrences = 4; // approx 4 weeks per month
+      if (transaction.recurrence === 'monthly') occurrences = 1;
+      const signed = transaction.type === 'income' ? transaction.amount * occurrences : -transaction.amount * occurrences;
+      return total + signed;
     }, 0);
     return initialBalance + transactionTotal;
   };
@@ -210,12 +218,31 @@ export default function MoneyFlowApp() {
       return;
     }
 
+    // If editing, update existing transaction
+    if (editingTransaction) {
+      const updated: Transaction = {
+        ...editingTransaction,
+        type: transactionType,
+        amount: parseFloat(newTransactionAmount),
+        description: newTransactionDescription,
+        // keep original date
+        recurrence: recurrence,
+      };
+      setTransactions(transactions.map((t) => (t.id === updated.id ? updated : t)));
+      setEditingTransaction(null);
+      setNewTransactionAmount("");
+      setNewTransactionDescription("");
+      setShowAddTransaction(false);
+      return;
+    }
+
     const newTransaction: Transaction = {
       id: Date.now().toString(),
       type: transactionType,
       amount: parseFloat(newTransactionAmount),
       description: newTransactionDescription,
       date: new Date(),
+      recurrence: recurrence,
     };
 
     setTransactions([newTransaction, ...transactions]);
@@ -223,6 +250,64 @@ export default function MoneyFlowApp() {
     setNewTransactionDescription("");
     setShowAddTransaction(false);
   };
+
+  const onEditTransaction = (tx: Transaction) => {
+    setEditingTransaction(tx);
+    setTransactionType(tx.type);
+    setNewTransactionAmount(tx.amount.toString());
+    setNewTransactionDescription(tx.description);
+    setRecurrence(tx.recurrence || 'none');
+    setShowAddTransaction(true);
+  };
+
+  const deleteTransaction = (id: string) => {
+    const ok = typeof window !== 'undefined' && window.confirm ? window.confirm(t.resetConfirm) : true;
+    if (!ok) return;
+    setTransactions(transactions.filter((t) => t.id !== id));
+  };
+
+  // Generate real transactions every second for any transaction marked 'secondly'.
+  const secondlyIntervalRef = useRef<number | null>(null);
+  useEffect(() => {
+    // clear previous interval
+    if (secondlyIntervalRef.current) {
+      clearInterval(secondlyIntervalRef.current);
+      secondlyIntervalRef.current = null;
+    }
+
+    if (currentScreen !== 'dashboard') return;
+
+    const templates = transactions.filter((tx) => tx.recurrence === 'secondly');
+    if (templates.length === 0) return;
+
+    // set up interval
+    const id = setInterval(() => {
+      setTransactions((prev) => {
+        const now = new Date();
+        const newOnes = templates.map((tpl) => ({
+          id: Date.now().toString() + Math.random().toString(36).slice(2, 7),
+          type: tpl.type,
+          amount: tpl.amount,
+          description: tpl.description + ' (auto)',
+          date: now,
+          recurrence: 'none' as const,
+        }));
+        // prepend new generated transactions
+        const merged = [...newOnes, ...prev];
+        // keep list capped to 500 items to avoid memory blowup during testing
+        return merged.slice(0, 500);
+      });
+    }, 1000);
+
+    secondlyIntervalRef.current = id as unknown as number;
+
+    return () => {
+      if (secondlyIntervalRef.current) {
+        clearInterval(secondlyIntervalRef.current);
+        secondlyIntervalRef.current = null;
+      }
+    };
+  }, [transactions, currentScreen]);
 
   const resetAccount = () => {
     // Einfache Bestätigung mit alert - in einer echten App würde man ein Modal verwenden
@@ -407,18 +492,35 @@ export default function MoneyFlowApp() {
                   <Text style={styles.transactionDescription}>
                     {transaction.description}
                   </Text>
-                  <Text
-                    style={[
-                      styles.transactionAmount,
-                      transaction.type === 'income' ? styles.incomeAmount : styles.expenseAmount,
-                    ]}
-                  >
-                    {transaction.type === 'income' ? '+' : '-'}{currencySymbol} {transaction.amount.toFixed(2)}
-                  </Text>
+                    <View style={styles.transactionRight}>
+                      <Text
+                        style={[
+                          styles.transactionAmount,
+                          transaction.type === 'income' ? styles.incomeAmount : styles.expenseAmount,
+                        ]}
+                      >
+                        {transaction.type === 'income' ? '+' : '-'}{currencySymbol} {transaction.amount.toFixed(2)}
+                      </Text>
+                      <View style={styles.actionButtons}>
+                        <TouchableOpacity onPress={() => onEditTransaction(transaction)} style={styles.actionButton}>
+                          <Text style={styles.actionButtonText}>Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => deleteTransaction(transaction.id)} style={[styles.actionButton, styles.deleteAction] }>
+                          <Text style={[styles.actionButtonText, styles.deleteActionText]}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                 </View>
                 <Text style={styles.transactionDate}>
                   {transaction.date.toLocaleDateString()}
                 </Text>
+                  {transaction.recurrence && transaction.recurrence !== 'none' && (
+                    <View style={styles.recurrenceBadge}>
+                      <Text style={styles.recurrenceBadgeText}>
+                        {transaction.recurrence === 'weekly' ? 'Weekly' : 'Monthly'}
+                      </Text>
+                    </View>
+                  )}
               </View>
             ))
           )}
@@ -428,7 +530,7 @@ export default function MoneyFlowApp() {
         {showAddTransaction && (
           <View style={styles.modal}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t.addTransaction}</Text>
+              <Text style={styles.modalTitle}>{editingTransaction ? 'Edit Transaction' : t.addTransaction}</Text>
               
               {/* Typ auswählen */}
               <View style={styles.typeSelector}>
@@ -452,6 +554,34 @@ export default function MoneyFlowApp() {
                 </TouchableOpacity>
               </View>
 
+              {/* Recurrence selector */}
+              <View style={{ flexDirection: 'row', marginBottom: 12, justifyContent: 'center' }}>
+                <TouchableOpacity
+                  style={[styles.typeButton, recurrence === 'none' && styles.typeButtonSelected]}
+                  onPress={() => setRecurrence('none')}
+                >
+                  <Text style={styles.typeButtonText}>None</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.typeButton, recurrence === 'weekly' && styles.typeButtonSelected]}
+                  onPress={() => setRecurrence('weekly')}
+                >
+                  <Text style={styles.typeButtonText}>Weekly</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.typeButton, recurrence === 'monthly' && styles.typeButtonSelected]}
+                  onPress={() => setRecurrence('monthly')}
+                >
+                  <Text style={styles.typeButtonText}>Monthly</Text>
+                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.typeButton, recurrence === 'secondly' && styles.typeButtonSelected]}
+                    onPress={() => setRecurrence('secondly')}
+                  >
+                    <Text style={styles.typeButtonText}>Every sec</Text>
+                  </TouchableOpacity>
+              </View>
+
               <TextInput
                 style={styles.input}
                 placeholder={t.enterAmount}
@@ -470,7 +600,7 @@ export default function MoneyFlowApp() {
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={styles.modalButton}
-                  onPress={() => setShowAddTransaction(false)}
+                  onPress={() => { setShowAddTransaction(false); setEditingTransaction(null); setNewTransactionAmount(''); setNewTransactionDescription(''); }}
                 >
                   <Text style={styles.modalButtonText}>{t.cancel}</Text>
                 </TouchableOpacity>
@@ -479,7 +609,7 @@ export default function MoneyFlowApp() {
                   onPress={addTransaction}
                 >
                   <Text style={[styles.modalButtonText, styles.modalButtonTextPrimary]}>
-                    {t.add}
+                    {editingTransaction ? 'Save' : t.add}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -731,6 +861,45 @@ const styles = StyleSheet.create({
   transactionDate: {
     fontSize: 12,
     color: "#6b7280",
+  },
+  transactionRight: {
+    alignItems: 'flex-end',
+    marginLeft: 12,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    marginTop: 6,
+  },
+  actionButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginLeft: 6,
+  },
+  actionButtonText: {
+    fontSize: 12,
+    color: '#374151',
+  },
+  deleteAction: {
+    borderColor: '#ef4444',
+    backgroundColor: '#fff5f5',
+  },
+  deleteActionText: {
+    color: '#ef4444',
+  },
+  recurrenceBadge: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: '#e5e7eb',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  recurrenceBadgeText: {
+    fontSize: 12,
+    color: '#374151',
   },
   // Modal Styles
   modal: {
